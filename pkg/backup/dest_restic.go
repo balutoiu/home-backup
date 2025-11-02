@@ -37,6 +37,8 @@ func (r *ResticDestinationBackup) Create(backupPath string) error {
 			if _, err := utils.ExecCommand(cmd); err != nil {
 				return fmt.Errorf("failed to initialize restic repository: %v", err)
 			}
+		} else {
+			return fmt.Errorf("failed to check if restic repository exists: %v", err)
 		}
 	}
 	log.Debug("creating restic backup")
@@ -46,6 +48,13 @@ func (r *ResticDestinationBackup) Create(backupPath string) error {
 	}
 	if _, err := utils.ExecCommand(cmd); err != nil {
 		return fmt.Errorf("failed to create restic backup: %v", err)
+	}
+	log.Debug("pruning old restic backups")
+	cmd = utils.ExternalCommand{
+		Command: []string{"restic", "--repo", r.Params.Repo, "forget", "--keep-last", fmt.Sprintf("%d", r.Params.KeepLast), "--prune"},
+	}
+	if _, err := utils.ExecCommand(cmd); err != nil {
+		return fmt.Errorf("failed to prune old restic backups: %v", err)
 	}
 	return nil
 }

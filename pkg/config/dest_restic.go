@@ -7,7 +7,8 @@ import (
 )
 
 type DestResticParams struct {
-	Repo string `yaml:"repo"`
+	Repo     string `yaml:"repo"`
+	KeepLast int    `yaml:"keep_last,omitempty"`
 }
 
 func (d *DestResticParams) ParseParams(params map[string]string) error {
@@ -27,6 +28,12 @@ func (d *DestResticParams) ParseParams(params map[string]string) error {
 func (d *DestResticParams) validate() error {
 	if d.Repo == "" {
 		return fmt.Errorf("restic destination 'repo' parameter is required")
+	}
+	if d.KeepLast < 0 {
+		return fmt.Errorf("restic destination 'keep_last' parameter cannot be negative")
+	} else if d.KeepLast == 0 {
+		// set default value
+		d.KeepLast = 10
 	}
 	return nil
 }
