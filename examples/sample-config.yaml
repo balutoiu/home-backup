@@ -1,0 +1,24 @@
+backups:
+  #
+  # LVM --> Restic
+  #
+  - source:
+      type: lvm
+      params:
+        vg_name: <VG_NAME>
+        lv_name: <LV_NAME>
+    destination:
+      type: restic
+      params:
+        repo: <RESTIC_REPO>
+  #
+  # Directory --> Restic
+  #
+  - source:
+      type: directory
+      params:
+        path: <DIRECTORY_PATH>
+    destination:
+      type: restic
+      params:
+        repo: <RESTIC_REPO>
