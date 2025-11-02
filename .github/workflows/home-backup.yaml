@@ -11,6 +11,6 @@ jobs:
     uses: balutoiu/gha-utils/.github/workflows/docker-buildx.yaml@dev
     with:
       image_name: home-backup
-      context: ./projects/home-backup
+      context: .
       platforms: linux/amd64, linux/arm64
     secrets: inherit
