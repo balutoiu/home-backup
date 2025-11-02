@@ -1,4 +1,4 @@
-name: Home Backup Container Image
+name: Home Backup
 
 on:
   push:
