@@ -6,10 +6,6 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+"
       - "[0-9]+.[0-9]+.[0-9]+-*"
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   container-image:
     uses: balutoiu/gha-utils/.github/workflows/docker-buildx.yaml@dev
