@@ -13,18 +13,8 @@ type Config struct {
 }
 
 type Backup struct {
-	Source      Source      `yaml:"source"`
-	Destination Destination `yaml:"destination"`
-}
-
-type Source struct {
-	Type   string            `yaml:"type"`
-	Params map[string]string `yaml:"params"`
-}
-
-type Destination struct {
-	Type   string            `yaml:"type"`
-	Params map[string]string `yaml:"params"`
+	Source      map[string]string `yaml:"source"`
+	Destination map[string]string `yaml:"destination"`
 }
 
 // LoadConfig reads and parses the YAML configuration file.

@@ -8,7 +8,7 @@ import (
 
 func CreateBackups(config *config.Config) error {
 	for _, backup := range config.Backups {
-		log.Debugf("creating backup from %s (%s) to %s (%s)", backup.Source.Type, backup.Source.Params, backup.Destination.Type, backup.Destination.Params)
+		log.Debugf("creating backup from %s to %s", backup.Source, backup.Destination)
 		if err := createSingleBackup(backup); err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func createSingleBackup(backup config.Backup) error {
 	}
 	defer func() {
 		if err := srcBackup.Cleanup(); err != nil {
-			log.Warnf("failed to clean up source backup %s with params (%s): %v", backup.Source.Type, backup.Source.Params, err)
+			log.Warnf("failed to clean up source backup %s: %v", backup.Source, err)
 		}
 	}()
 	log.Debug("creating backup at destination")
