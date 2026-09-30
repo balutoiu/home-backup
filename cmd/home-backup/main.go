@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ionutbalutoiu/home-backup/internal/app"
+	"github.com/balutoiu/home-backup/internal/app"
 )
 
 func main() {

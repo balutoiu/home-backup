@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
+	"github.com/balutoiu/home-backup/internal/backup"
 )
 
 // Source opens an existing directory as backup input.

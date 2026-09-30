@@ -13,9 +13,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
-	"github.com/ionutbalutoiu/home-backup/internal/command"
-	"github.com/ionutbalutoiu/home-backup/internal/config"
+	"github.com/balutoiu/home-backup/internal/backup"
+	"github.com/balutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/config"
 )
 
 type options struct {

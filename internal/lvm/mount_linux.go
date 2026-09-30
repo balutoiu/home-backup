@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ionutbalutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/command"
 	"golang.org/x/sys/unix"
 )
 

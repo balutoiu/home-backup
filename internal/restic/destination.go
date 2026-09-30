@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
-	"github.com/ionutbalutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/backup"
+	"github.com/balutoiu/home-backup/internal/command"
 )
 
 const repositoryNotFoundExitCode = 10

@@ -8,7 +8,7 @@ on:
 
 jobs:
   container-image:
-    uses: ionutbalutoiu/gha-utils/.github/workflows/docker-buildx.yaml@main
+    uses: balutoiu/gha-utils/.github/workflows/docker-buildx.yaml@main
     permissions:
       contents: read
       packages: write

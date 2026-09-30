@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
-	"github.com/ionutbalutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/backup"
+	"github.com/balutoiu/home-backup/internal/command"
 )
 
 // DefaultSnapshotSize is used when a source does not specify a snapshot size.

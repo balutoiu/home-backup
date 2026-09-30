@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
-	appconfig "github.com/ionutbalutoiu/home-backup/internal/config"
-	homekube "github.com/ionutbalutoiu/home-backup/internal/kubernetes"
+	"github.com/balutoiu/home-backup/internal/backup"
+	appconfig "github.com/balutoiu/home-backup/internal/config"
+	homekube "github.com/balutoiu/home-backup/internal/kubernetes"
 	"gopkg.in/yaml.v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"

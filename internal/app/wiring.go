@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ionutbalutoiu/home-backup/internal/backup"
-	"github.com/ionutbalutoiu/home-backup/internal/command"
-	"github.com/ionutbalutoiu/home-backup/internal/config"
-	"github.com/ionutbalutoiu/home-backup/internal/directory"
-	homekube "github.com/ionutbalutoiu/home-backup/internal/kubernetes"
-	"github.com/ionutbalutoiu/home-backup/internal/longhorn"
-	"github.com/ionutbalutoiu/home-backup/internal/lvm"
-	"github.com/ionutbalutoiu/home-backup/internal/restic"
+	"github.com/balutoiu/home-backup/internal/backup"
+	"github.com/balutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/config"
+	"github.com/balutoiu/home-backup/internal/directory"
+	homekube "github.com/balutoiu/home-backup/internal/kubernetes"
+	"github.com/balutoiu/home-backup/internal/longhorn"
+	"github.com/balutoiu/home-backup/internal/lvm"
+	"github.com/balutoiu/home-backup/internal/restic"
 )
 
 type commandRunner interface {

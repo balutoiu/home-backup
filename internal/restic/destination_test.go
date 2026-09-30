@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ionutbalutoiu/home-backup/internal/command"
+	"github.com/balutoiu/home-backup/internal/command"
 )
 
 type fakeRunner struct {
