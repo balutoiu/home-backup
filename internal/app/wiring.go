@@ -21,8 +21,8 @@ type wiringDependencies struct {
 	euid   func() int
 }
 
-func buildJobs(cfg config.Config, deps wiringDependencies) ([]backup.Job, error) {
-	jobs := make([]backup.Job, 0, len(cfg.Backups))
+func buildBackups(cfg config.Config, deps wiringDependencies) ([]backup.Backup, error) {
+	backups := make([]backup.Backup, 0, len(cfg.Backups))
 	for i, spec := range cfg.Backups {
 		source, err := buildSource(spec.Source, deps)
 		if err != nil {
@@ -32,9 +32,13 @@ func buildJobs(cfg config.Config, deps wiringDependencies) ([]backup.Job, error)
 		if err != nil {
 			return nil, fmt.Errorf("build backup %d destination: %w", i+1, err)
 		}
-		jobs = append(jobs, backup.NewLocalJob(source, destination))
+		backups = append(backups, backup.Backup{
+			Label:       spec.Source.String(),
+			Source:      source,
+			Destination: destination,
+		})
 	}
-	return jobs, nil
+	return backups, nil
 }
 
 func buildSource(spec config.Source, deps wiringDependencies) (backup.Source, error) {

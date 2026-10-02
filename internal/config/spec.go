@@ -1,6 +1,8 @@
 // Package config decodes and validates home-backup configuration.
 package config
 
+import "fmt"
+
 // SourceKind identifies a configured backup source.
 type SourceKind string
 
@@ -26,7 +28,7 @@ const (
 	DefaultResticGroupBy = "host"
 )
 
-// Config contains all configured backup jobs.
+// Config contains all configured backups.
 type Config struct {
 	Backups []Backup
 }
@@ -42,6 +44,21 @@ type Source struct {
 	Kind      SourceKind
 	Directory *DirectorySource
 	LVM       *LVMSource
+}
+
+// String describes the source by its type and identity, e.g. "lvm vg0/home".
+func (s Source) String() string {
+	switch s.Kind {
+	case SourceDirectory:
+		if s.Directory != nil {
+			return fmt.Sprintf("%s %s", s.Kind, s.Directory.Path)
+		}
+	case SourceLVM:
+		if s.LVM != nil {
+			return fmt.Sprintf("%s %s/%s", s.Kind, s.LVM.VGName, s.LVM.LVName)
+		}
+	}
+	return string(s.Kind)
 }
 
 // DirectorySource configures a directory source.

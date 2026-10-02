@@ -49,7 +49,7 @@ func TestParseOptionsRejectsInvalidLogLevel(t *testing.T) {
 	}
 }
 
-func TestRunLoadsBuildsAndExecutesJobs(t *testing.T) {
+func TestRunLoadsBuildsAndExecutesBackups(t *testing.T) {
 	sourcePath := t.TempDir()
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	contents := "backups:\n" +

@@ -108,3 +108,23 @@ func TestDecodeRejectsInvalidConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceString(t *testing.T) {
+	t.Parallel()
+
+	yaml := `backups:
+  - source: {type: directory, path: /srv/photos}
+    destination: {type: restic, repo: /repo}
+  - source: {type: lvm, vg_name: vg0, lv_name: home}
+    destination: {type: restic, repo: /repo}
+`
+	cfg, err := Decode(strings.NewReader(yaml), "test.yaml")
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	for i, want := range []string{"directory /srv/photos", "lvm vg0/home"} {
+		if got := cfg.Backups[i].Source.String(); got != want {
+			t.Fatalf("Backups[%d].Source.String() = %q, want %q", i, got, want)
+		}
+	}
+}

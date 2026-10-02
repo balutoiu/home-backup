@@ -18,7 +18,7 @@ func (f *fakeRunner) Run(_ context.Context, spec command.Spec) (command.Result, 
 	return command.Result{ExitCode: 0}, nil
 }
 
-func TestBuildJobs(t *testing.T) {
+func TestBuildBackups(t *testing.T) {
 	cfg := config.Config{Backups: []config.Backup{{
 		Source: config.Source{
 			Kind:      config.SourceDirectory,
@@ -34,19 +34,22 @@ func TestBuildJobs(t *testing.T) {
 		},
 	}}}
 
-	jobs, err := buildJobs(cfg, wiringDependencies{
+	backups, err := buildBackups(cfg, wiringDependencies{
 		runner: &fakeRunner{},
 		euid:   func() int { return 0 },
 	})
 	if err != nil {
-		t.Fatalf("buildJobs() error = %v", err)
+		t.Fatalf("buildBackups() error = %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	if len(backups) != 1 {
+		t.Fatalf("len(backups) = %d, want 1", len(backups))
+	}
+	if got := backups[0].Label; got != "directory /srv/home" {
+		t.Fatalf("Label = %q, want %q", got, "directory /srv/home")
 	}
 }
 
-func TestBuildJobsRejectsUnsupportedKinds(t *testing.T) {
+func TestBuildBackupsRejectsUnsupportedKinds(t *testing.T) {
 	validSource := config.Source{
 		Kind:      config.SourceDirectory,
 		Directory: &config.DirectorySource{Path: "/srv/home"},
@@ -84,12 +87,12 @@ func TestBuildJobsRejectsUnsupportedKinds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := buildJobs(config.Config{Backups: []config.Backup{tt.backup}}, wiringDependencies{
+			_, err := buildBackups(config.Config{Backups: []config.Backup{tt.backup}}, wiringDependencies{
 				runner: &fakeRunner{},
 				euid:   func() int { return 0 },
 			})
 			if err == nil || !strings.Contains(err.Error(), tt.wantMessage) {
-				t.Fatalf("buildJobs() error = %v, want substring %q", err, tt.wantMessage)
+				t.Fatalf("buildBackups() error = %v, want substring %q", err, tt.wantMessage)
 			}
 		})
 	}

@@ -45,11 +45,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, deps runt
 		return err
 	}
 	runner := deps.newRunner(logger)
-	jobs, err := buildJobs(cfg, wiringDependencies{runner: runner, euid: deps.euid})
+	backups, err := buildBackups(cfg, wiringDependencies{runner: runner, euid: deps.euid})
 	if err != nil {
 		return err
 	}
-	return backup.NewEngine(jobs...).Run(ctx)
+	return backup.Run(ctx, backups)
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
