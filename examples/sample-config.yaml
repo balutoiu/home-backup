@@ -6,9 +6,11 @@ backups:
       type: lvm
       vg_name: <VG_NAME>
       lv_name: <LV_NAME>
+      # snapshot_size: 10G  # optional, default: "10G"; any lvcreate --size value
     destination:
       type: restic
       repo: <RESTIC_REPO>
+      # keep_last: 10  # optional, default: 10
       # group_by: host  # optional, default: "host"
   #
   # Directory --> Restic
@@ -19,4 +21,5 @@ backups:
     destination:
       type: restic
       repo: <RESTIC_REPO>
+      # keep_last: 10  # optional, default: 10
       # group_by: host  # optional, default: "host"

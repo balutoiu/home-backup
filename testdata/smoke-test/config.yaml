@@ -5,4 +5,4 @@ backups:
     destination:
       type: restic
       repo: /tmp/restic-repo
-      keep_last: "3"
+      keep_last: 3

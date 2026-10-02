@@ -15,7 +15,7 @@ const DefaultLVMSnapshotSize = "10G"
 type LVMSource struct {
 	VGName       string `yaml:"vg_name"`
 	LVName       string `yaml:"lv_name"`
-	SnapshotSize string `yaml:"-"`
+	SnapshotSize string `yaml:"snapshot_size"`
 }
 
 func (LVMSource) isSource() {}
@@ -33,6 +33,9 @@ func decodeLVM(node yaml.Node) (LVMSource, error) {
 	}
 	if s.LVName == "" {
 		return LVMSource{}, errors.New("LVM source lv_name is required")
+	}
+	if s.SnapshotSize == "" {
+		return LVMSource{}, errors.New("LVM source snapshot_size cannot be empty")
 	}
 	return s, nil
 }

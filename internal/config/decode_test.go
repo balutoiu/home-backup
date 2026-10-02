@@ -38,10 +38,11 @@ func TestDecodeValidConfig(t *testing.T) {
       type: lvm
       vg_name: vg0
       lv_name: home
+      snapshot_size: 20G
     destination:
       type: restic
       repo: rclone:remote:home
-      keep_last: "4"
+      keep_last: 4
       group_by: paths
 `
 
@@ -58,12 +59,28 @@ func TestDecodeValidConfig(t *testing.T) {
 	if got, ok := cfg.Backups[0].Destination.(ResticDestination); !ok || got.KeepLast != DefaultResticKeepLast || got.GroupBy != DefaultResticGroupBy {
 		t.Fatalf("default Restic destination = %#v", cfg.Backups[0].Destination)
 	}
-	want := LVMSource{VGName: "vg0", LVName: "home", SnapshotSize: DefaultLVMSnapshotSize}
+	want := LVMSource{VGName: "vg0", LVName: "home", SnapshotSize: "20G"}
 	if got, ok := cfg.Backups[1].Source.(LVMSource); !ok || got != want {
 		t.Fatalf("LVM source = %#v", cfg.Backups[1].Source)
 	}
 	if got, ok := cfg.Backups[1].Destination.(ResticDestination); !ok || got.KeepLast != 4 || got.GroupBy != "paths" {
 		t.Fatalf("explicit Restic destination = %#v", cfg.Backups[1].Destination)
+	}
+}
+
+func TestDecodeDefaultsLVMSnapshotSize(t *testing.T) {
+	t.Parallel()
+
+	yaml := `backups:
+  - source: {type: lvm, vg_name: vg0, lv_name: home}
+    destination: {type: restic, repo: /repo}
+`
+	cfg, err := Decode(strings.NewReader(yaml), "test.yaml")
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if got := cfg.Backups[0].Source.(LVMSource).SnapshotSize; got != DefaultLVMSnapshotSize {
+		t.Fatalf("SnapshotSize = %q, want %q", got, DefaultLVMSnapshotSize)
 	}
 }
 
@@ -102,7 +119,11 @@ func TestDecodeRejectsInvalidConfig(t *testing.T) {
 		{name: "missing LVM vg_name", yaml: "backups:\n- source: {type: lvm, lv_name: home}\n  destination: {type: restic, repo: /repo}\n", want: "LVM source vg_name is required"},
 		{name: "missing restic repo", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic}\n", want: "restic destination repo is required"},
 		{name: "missing directory path", yaml: "backups:\n- source: {type: directory}\n  destination: {type: restic, repo: /repo}\n", want: "directory source path is required"},
-		{name: "negative retention", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep_last: -1}\n", want: "keep_last cannot be negative"},
+		{name: "negative retention", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep_last: -1}\n", want: "keep_last must be at least 1"},
+		{name: "zero retention", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep_last: 0}\n", want: "keep_last must be at least 1"},
+		{name: "quoted retention", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep_last: \"4\"}\n", want: "line 3: cannot unmarshal !!str `4` into int"},
+		{name: "empty group_by", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, group_by: \"\"}\n", want: "group_by cannot be empty"},
+		{name: "empty snapshot_size", yaml: "backups:\n- source: {type: lvm, vg_name: vg0, lv_name: home, snapshot_size: \"\"}\n  destination: {type: restic, repo: /repo}\n", want: "snapshot_size cannot be empty"},
 		{name: "multiple documents", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo}\n---\nbackups: []\n", want: "multiple YAML documents"},
 	}
 
