@@ -49,7 +49,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, deps runt
 	if err != nil {
 		return err
 	}
-	return backup.Run(ctx, backups)
+	return backup.Run(ctx, logger, backups)
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
