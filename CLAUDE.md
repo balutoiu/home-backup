@@ -24,3 +24,4 @@ After making changes, run these steps in order:
 2. `make build` — ensure it compiles
 3. `make test` — all tests pass
 4. `make lint` — no lint errors
+5. `make test-lvm-vm` — only for changes to `internal/lvm`, `internal/command`, `internal/app` or the `Dockerfile`; runs the LVM scenarios in throwaway libvirt VMs (needs KVM and libvirt, takes minutes)

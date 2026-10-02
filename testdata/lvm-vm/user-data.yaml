@@ -1,0 +1,13 @@
+#cloud-config
+# run.sh replaces @SSH_PUBLIC_KEY@ with the key it generates for the run.
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - "@SSH_PUBLIC_KEY@"
+package_update: true
+packages:
+  - docker.io
+  - lvm2
+  - xfsprogs

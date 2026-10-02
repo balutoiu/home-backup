@@ -1,0 +1,18 @@
+backups:
+  - source:
+      type: lvm
+      vg_name: hbtest
+      lv_name: happy-ext4
+      snapshot_size: 128M
+    destination:
+      type: restic
+      repo: /srv/hbtest/repos/happy-ext4
+  # xfs needs nouuid to mount the snapshot while its origin is mounted.
+  - source:
+      type: lvm
+      vg_name: hbtest
+      lv_name: happy-xfs
+      snapshot_size: 128M
+    destination:
+      type: restic
+      repo: /srv/hbtest/repos/happy-xfs

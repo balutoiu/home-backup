@@ -12,7 +12,7 @@ GO := docker run --rm \
 	$(GO_IMAGE) go
 endif
 
-.PHONY: build test lint fmt clean
+.PHONY: build test test-lvm-vm lint fmt clean
 
 build:
 	mkdir -p build
@@ -20,6 +20,9 @@ build:
 
 test:
 	$(GO) test ./...
+
+test-lvm-vm:
+	./testdata/lvm-vm/run.sh
 
 lint:
 	$(GO) vet ./...
