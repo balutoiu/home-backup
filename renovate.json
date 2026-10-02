@@ -5,5 +5,14 @@
     "customManagers:dockerfileVersions",
     "customManagers:githubActionsVersions",
     ":disableRateLimiting"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Keep the Makefile's GO_IMAGE in step with the Dockerfile's golang image",
+      "managerFilePatterns": ["/(^|/)Makefile$/"],
+      "matchStrings": ["GO_IMAGE \\?= (?<depName>golang):(?<currentValue>\\S+)"],
+      "datasourceTemplate": "docker"
+    }
   ]
 }
