@@ -4,9 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/balutoiu/home-backup/internal/backup"
 	"github.com/balutoiu/home-backup/internal/command"
 	"github.com/balutoiu/home-backup/internal/config"
 )
@@ -45,67 +43,6 @@ func TestBuildJobs(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
-	}
-}
-
-type stubJob struct{}
-
-func (stubJob) Run(context.Context) error { return nil }
-
-func TestBuildJobsLonghornPVC(t *testing.T) {
-	called := false
-	cfg := config.Config{Backups: []config.Backup{{
-		Source: config.Source{
-			Kind: config.SourceLonghornPVC,
-			LonghornPVC: &config.LonghornPVCSource{
-				PVCName: "data", SnapshotClass: "snap", MountPath: "/snapshot",
-				ContainerName: "home-backup", Timeout: time.Minute,
-			},
-		},
-		Destination: config.Destination{
-			Kind:   config.DestinationRestic,
-			Restic: &config.ResticDestination{Repo: "/repo", KeepLast: 4, GroupBy: "host,paths"},
-		},
-	}}}
-
-	jobs, err := buildJobs(cfg, wiringDependencies{
-		longhornJob: func(source config.LonghornPVCSource, destination config.ResticDestination) (backup.Job, error) {
-			called = true
-			if source.PVCName != "data" || source.ContainerName != "home-backup" || destination.Repo != "/repo" || destination.GroupBy != "host,paths" {
-				t.Fatalf("builder input source=%#v destination=%#v", source, destination)
-			}
-			return stubJob{}, nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("buildJobs() error = %v", err)
-	}
-	if !called || len(jobs) != 1 {
-		t.Fatalf("builder called=%v jobs=%d", called, len(jobs))
-	}
-}
-
-func TestBuildJobsRejectsLonghornPathsOnlyRetentionBeforeBuilder(t *testing.T) {
-	called := false
-	cfg := config.Config{Backups: []config.Backup{{
-		Source: config.Source{Kind: config.SourceLonghornPVC, LonghornPVC: &config.LonghornPVCSource{
-			PVCName: "data", SnapshotClass: "snap", MountPath: "/snapshot",
-			ContainerName: "home-backup", Timeout: time.Minute,
-		}},
-		Destination: config.Destination{Kind: config.DestinationRestic, Restic: &config.ResticDestination{
-			Repo: "/repo", KeepLast: 1, GroupBy: "paths",
-		}},
-	}}}
-
-	_, err := buildJobs(cfg, wiringDependencies{longhornJob: func(config.LonghornPVCSource, config.ResticDestination) (backup.Job, error) {
-		called = true
-		return stubJob{}, nil
-	}})
-	if err == nil || !strings.Contains(err.Error(), "group_by") || !strings.Contains(err.Error(), "host") {
-		t.Fatalf("buildJobs() error = %v", err)
-	}
-	if called {
-		t.Fatal("Longhorn builder was called before paths-only retention was rejected")
 	}
 }
 

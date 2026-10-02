@@ -2,9 +2,7 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,19 +22,15 @@ type options struct {
 }
 
 type runtimeDependencies struct {
-	newRunner             func(*slog.Logger) commandRunner
-	euid                  func() int
-	lookupEnv             func(string) (string, bool)
-	newLonghornJobBuilder func(*slog.Logger) longhornJobBuilder
+	newRunner func(*slog.Logger) commandRunner
+	euid      func() int
 }
 
 // Run parses application arguments and executes all configured backups.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	return run(ctx, args, stdout, stderr, runtimeDependencies{
-		newRunner:             func(logger *slog.Logger) commandRunner { return command.NewRunner(logger) },
-		euid:                  os.Geteuid,
-		lookupEnv:             os.LookupEnv,
-		newLonghornJobBuilder: newLonghornJobBuilder,
+		newRunner: func(logger *slog.Logger) commandRunner { return command.NewRunner(logger) },
+		euid:      os.Geteuid,
 	})
 }
 
@@ -46,35 +40,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, deps runt
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(stdout, &slog.HandlerOptions{Level: opts.logLevel}))
-	cfg, err := loadConfig(opts.configPath, deps.lookupEnv)
+	cfg, err := config.Load(opts.configPath)
 	if err != nil {
 		return err
 	}
 	runner := deps.newRunner(logger)
-	longhornBuilderFactory := deps.newLonghornJobBuilder
-	if longhornBuilderFactory == nil {
-		longhornBuilderFactory = newLonghornJobBuilder
-	}
-	jobs, err := buildJobs(cfg, wiringDependencies{
-		runner: runner, euid: deps.euid, longhornJob: longhornBuilderFactory(logger),
-	})
+	jobs, err := buildJobs(cfg, wiringDependencies{runner: runner, euid: deps.euid})
 	if err != nil {
 		return err
 	}
 	return backup.NewEngine(jobs...).Run(ctx)
-}
-
-type envLookup func(string) (string, bool)
-
-func loadConfig(path string, lookupEnv envLookup) (config.Config, error) {
-	if encoded, ok := lookupEnv(config.EnvConfigBase64); ok && strings.TrimSpace(encoded) != "" {
-		data, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil {
-			return config.Config{}, fmt.Errorf("decode %s: %w", config.EnvConfigBase64, err)
-		}
-		return config.Decode(bytes.NewReader(data), config.EnvConfigBase64)
-	}
-	return config.Load(path)
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
