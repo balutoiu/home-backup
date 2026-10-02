@@ -59,6 +59,14 @@ expect_backed_up() {
     done
 }
 
+expect_lv() {
+    lvs "${VG}/$1" >/dev/null 2>&1 || fail "LV ${VG}/$1 is gone"
+}
+
+expect_log() {
+    grep -qF "$2" "${WORK}/logs/$1.log" || fail "$1 log lacks: $2"
+}
+
 expect_no_lv() {
     if lvs "${VG}/$1" >/dev/null 2>&1; then
         fail "LV ${VG}/$1 still exists"
@@ -75,13 +83,49 @@ scenario_happy() {
     done
 }
 
+# A Run that died mid-backup leaves its snapshot behind; the next Run
+# removes it and carries on.
+scenario_stale() {
+    make_origin stale ext4 256M
+    lvcreate -q -y -s -L 64M -n stale_backup_snapshot "${VG}/stale" >/dev/null
+    run_backup stale || fail "home-backup exited non-zero"
+    expect_log stale 'level=WARN msg="removed stale LVM snapshot" snapshot=/dev/hbtest/stale_backup_snapshot'
+    expect_backed_up stale
+    expect_no_lv stale_backup_snapshot
+}
+
+# lvremove refuses a snapshot that is still mounted, so the Run fails and
+# leaves it alone.
+scenario_stale_open() {
+    make_origin stale-open ext4 256M
+    lvcreate -q -y -s -L 64M -n stale-open_backup_snapshot "${VG}/stale-open" >/dev/null
+    mkdir -p /mnt/stale-open-snapshot
+    mount -o ro "/dev/${VG}/stale-open_backup_snapshot" /mnt/stale-open-snapshot
+    if run_backup stale-open; then
+        fail "home-backup succeeded with the stale snapshot mounted"
+    fi
+    expect_log stale-open 'remove stale LVM snapshot \"/dev/hbtest/stale-open_backup_snapshot\"'
+    expect_lv stale-open_backup_snapshot
+}
+
+# A volume that only shares the snapshot's name is never removed.
+scenario_foreign() {
+    make_origin foreign ext4 256M
+    lvcreate -q -y -L 64M -n foreign_backup_snapshot "${VG}" >/dev/null
+    if run_backup foreign; then
+        fail "home-backup succeeded with a foreign volume in the way"
+    fi
+    expect_log foreign 'is not a snapshot of \"foreign\"'
+    expect_lv foreign_backup_snapshot
+}
+
 echo "--- Setting up volume group ${VG} on ${DISK} ---"
 pvcreate -q "${DISK}" >/dev/null
 vgcreate -q "${VG}" "${DISK}" >/dev/null
 mkdir -p "${WORK}/repos" "${WORK}/logs"
 
 failed=0
-for scenario in happy; do
+for scenario in happy stale stale_open foreign; do
     echo "--- Scenario: ${scenario} ---"
     # Not "|| status=$?": a condition context would disable set -e inside.
     set +e

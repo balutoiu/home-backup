@@ -1,0 +1,9 @@
+backups:
+  - source:
+      type: lvm
+      vg_name: hbtest
+      lv_name: foreign
+      snapshot_size: 128M
+    destination:
+      type: restic
+      repo: /srv/hbtest/repos/foreign

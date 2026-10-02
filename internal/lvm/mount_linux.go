@@ -52,7 +52,7 @@ func (m *SystemMounter) Mount(ctx context.Context, device string) (string, error
 	}
 	if err := m.mount(device, mountPath, filesystem, unix.MS_RDONLY, data); err != nil {
 		mountErr := fmt.Errorf("mount %q at %q: %w", device, mountPath, err)
-		if removeErr := os.RemoveAll(mountPath); removeErr != nil {
+		if removeErr := os.Remove(mountPath); removeErr != nil {
 			return "", errors.Join(mountErr, fmt.Errorf("remove mount directory %q: %w", mountPath, removeErr))
 		}
 		return "", mountErr
@@ -60,16 +60,16 @@ func (m *SystemMounter) Mount(ctx context.Context, device string) (string, error
 	return mountPath, nil
 }
 
-// Unmount unmounts path and removes its directory.
+// Unmount unmounts path and removes its directory. A directory that is still
+// mounted is left alone.
 func (m *SystemMounter) Unmount(path string) error {
-	var errs []error
 	if err := m.unmount(path, 0); err != nil {
-		errs = append(errs, err)
+		return err
 	}
-	if err := os.RemoveAll(path); err != nil {
-		errs = append(errs, fmt.Errorf("remove mount directory %q: %w", path, err))
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove mount directory %q: %w", path, err)
 	}
-	return errors.Join(errs...)
+	return nil
 }
 
 var _ Mounter = (*SystemMounter)(nil)

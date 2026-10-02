@@ -1,0 +1,9 @@
+backups:
+  - source:
+      type: lvm
+      vg_name: hbtest
+      lv_name: stale-open
+      snapshot_size: 128M
+    destination:
+      type: restic
+      repo: /srv/hbtest/repos/stale-open

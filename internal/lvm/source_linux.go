@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/balutoiu/home-backup/internal/backup"
 	"github.com/balutoiu/home-backup/internal/command"
@@ -35,6 +37,8 @@ type Dependencies struct {
 	Runner  CommandRunner
 	Mounter Mounter
 	EUID    func() int
+	// Logger reports a stale snapshot removed by Open; it must not be nil.
+	Logger *slog.Logger
 }
 
 // Source opens an LVM snapshot as backup input.
@@ -61,6 +65,13 @@ func (s *Source) Open(ctx context.Context) (backup.Input, error) {
 		vgName: s.config.VGName,
 		lvName: s.config.LVName,
 		size:   s.config.SnapshotSize,
+	}
+	removed, err := snap.removeStale(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if removed {
+		s.deps.Logger.WarnContext(ctx, "removed stale LVM snapshot", "snapshot", snap.path())
 	}
 	if err := snap.create(ctx); err != nil {
 		return nil, err
@@ -108,14 +119,39 @@ func (s snapshot) create(ctx context.Context) error {
 }
 
 func (s snapshot) remove(ctx context.Context) error {
+	if err := s.lvremove(ctx); err != nil {
+		return fmt.Errorf("remove LVM snapshot %q: %w", s.path(), err)
+	}
+	return nil
+}
+
+// removeStale removes a snapshot of this volume left behind by an earlier Run
+// and reports whether there was one. It refuses to touch any other volume
+// that has the snapshot's name.
+func (s snapshot) removeStale(ctx context.Context) (bool, error) {
+	result, err := s.runner.Run(ctx, command.Spec{
+		Name: "lvs",
+		Args: []string{"--noheadings", "--options", "origin", s.vgName + "/" + s.name()},
+	})
+	if err != nil {
+		// Usually there is no such volume. Any other LVM problem fails lvcreate.
+		return false, nil
+	}
+	if origin := strings.TrimSpace(result.Stdout); origin != s.lvName {
+		return false, fmt.Errorf("LVM volume %q exists but is not a snapshot of %q", s.path(), s.lvName)
+	}
+	if err := s.lvremove(ctx); err != nil {
+		return false, fmt.Errorf("remove stale LVM snapshot %q: %w", s.path(), err)
+	}
+	return true, nil
+}
+
+func (s snapshot) lvremove(ctx context.Context) error {
 	_, err := s.runner.Run(ctx, command.Spec{
 		Name: "lvremove",
 		Args: []string{"--force", s.path()},
 	})
-	if err != nil {
-		return fmt.Errorf("remove LVM snapshot %q: %w", s.path(), err)
-	}
-	return nil
+	return err
 }
 
 type input struct {
@@ -128,14 +164,11 @@ func (i *input) Path() string { return i.mountPath }
 
 // Release undoes Open in reverse: unmount, then remove the snapshot.
 func (i *input) Release(ctx context.Context) error {
-	var errs []error
 	if err := i.mounter.Unmount(i.mountPath); err != nil {
-		errs = append(errs, fmt.Errorf("unmount %q: %w", i.mountPath, err))
+		// A mounted snapshot is open, so lvremove would fail too.
+		return fmt.Errorf("unmount %q: %w", i.mountPath, err)
 	}
-	if err := i.snapshot.remove(ctx); err != nil {
-		errs = append(errs, err)
-	}
-	return errors.Join(errs...)
+	return i.snapshot.remove(ctx)
 }
 
 var _ backup.Source = (*Source)(nil)

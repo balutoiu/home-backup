@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -10,13 +12,15 @@ import (
 	"github.com/balutoiu/home-backup/internal/config"
 )
 
+// fakeRunner succeeds with empty output, except for commands named in errs.
 type fakeRunner struct {
 	specs []command.Spec
+	errs  map[string]error
 }
 
 func (f *fakeRunner) Run(_ context.Context, spec command.Spec) (command.Result, error) {
 	f.specs = append(f.specs, spec)
-	return command.Result{ExitCode: 0}, nil
+	return command.Result{}, f.errs[spec.Name]
 }
 
 func TestBuildBackups(t *testing.T) {
@@ -41,11 +45,12 @@ func TestBuildBackups(t *testing.T) {
 }
 
 func TestBuildBackupsPassesLVMSnapshotSize(t *testing.T) {
-	runner := &fakeRunner{}
+	// A failing lvs means there is no stale snapshot.
+	runner := &fakeRunner{errs: map[string]error{"lvs": errors.New("not found")}}
 	backups, err := buildBackups(config.Config{Backups: []config.Backup{{
 		Source:      config.LVMSource{VGName: "vg0", LVName: "home", SnapshotSize: "2G"},
 		Destination: config.ResticDestination{Repo: "/backups/restic", KeepLast: 5, GroupBy: "host"},
-	}}}, wiringDependencies{runner: runner, euid: func() int { return 0 }})
+	}}}, wiringDependencies{runner: runner, euid: func() int { return 0 }, logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatalf("buildBackups() error = %v", err)
 	}

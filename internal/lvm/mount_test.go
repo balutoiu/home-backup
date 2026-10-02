@@ -157,3 +157,19 @@ func TestSystemMounterUnmountRemovesDirectory(t *testing.T) {
 		t.Fatalf("mount directories = %v, want none", dirs)
 	}
 }
+
+func TestSystemMounterUnmountKeepsDirectoryWhenUnmountFails(t *testing.T) {
+	unmountErr := errors.New("target is busy")
+	m, _, _ := newTestMounter(t, blkidRunner("ext4\n", nil), nil, unmountErr)
+	path, err := m.Mount(context.Background(), "/dev/vg0/home_backup_snapshot")
+	if err != nil {
+		t.Fatalf("Mount() error = %v", err)
+	}
+
+	if err := m.Unmount(path); !errors.Is(err, unmountErr) {
+		t.Fatalf("Unmount() error = %v, want unmount error", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("mount directory after failed unmount: %v", err)
+	}
+}

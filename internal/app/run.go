@@ -45,7 +45,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, deps runt
 		return err
 	}
 	runner := deps.newRunner(logger)
-	backups, err := buildBackups(cfg, wiringDependencies{runner: runner, euid: deps.euid})
+	backups, err := buildBackups(cfg, wiringDependencies{runner: runner, euid: deps.euid, logger: logger})
 	if err != nil {
 		return err
 	}

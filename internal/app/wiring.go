@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/balutoiu/home-backup/internal/backup"
 	"github.com/balutoiu/home-backup/internal/command"
@@ -19,6 +20,7 @@ type commandRunner interface {
 type wiringDependencies struct {
 	runner commandRunner
 	euid   func() int
+	logger *slog.Logger
 }
 
 func buildBackups(cfg config.Config, deps wiringDependencies) ([]backup.Backup, error) {
@@ -55,6 +57,7 @@ func buildSource(spec config.Source, deps wiringDependencies) (backup.Source, er
 			Runner:  deps.runner,
 			Mounter: mounter,
 			EUID:    deps.euid,
+			Logger:  deps.logger,
 		}), nil
 	default:
 		return nil, fmt.Errorf("unsupported source %T", spec)
