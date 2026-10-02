@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/balutoiu/home-backup/internal/backup"
 	"github.com/balutoiu/home-backup/internal/command"
@@ -17,10 +15,12 @@ type CommandRunner interface {
 	Run(context.Context, command.Spec) (command.Result, error)
 }
 
-// Mounter mounts and unmounts snapshot devices.
+// Mounter mounts snapshot devices in directories it owns.
 type Mounter interface {
-	Mount(context.Context, string) (string, error)
-	Unmount(string) error
+	// Mount mounts device read-only in a new directory and returns its path.
+	Mount(ctx context.Context, device string) (string, error)
+	// Unmount unmounts path and removes the directory Mount created.
+	Unmount(path string) error
 }
 
 // Config identifies an LVM logical volume and snapshot size.
@@ -56,79 +56,84 @@ func (s *Source) Open(ctx context.Context) (backup.Input, error) {
 	if _, err := s.deps.Runner.Run(ctx, command.Spec{Name: "sync"}); err != nil {
 		return nil, fmt.Errorf("sync filesystems: %w", err)
 	}
-	_, err := s.deps.Runner.Run(ctx, command.Spec{
+	snap := snapshot{
+		runner: s.deps.Runner,
+		vgName: s.config.VGName,
+		lvName: s.config.LVName,
+		size:   s.config.SnapshotSize,
+	}
+	if err := snap.create(ctx); err != nil {
+		return nil, err
+	}
+
+	mountPath, err := s.deps.Mounter.Mount(ctx, snap.path())
+	if err != nil {
+		mountErr := fmt.Errorf("mount LVM snapshot %q: %w", snap.path(), err)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), backup.ReleaseTimeout)
+		defer cancel()
+		if removeErr := snap.remove(cleanupCtx); removeErr != nil {
+			return nil, errors.Join(mountErr, removeErr)
+		}
+		return nil, mountErr
+	}
+	return &input{mountPath: mountPath, snapshot: snap, mounter: s.deps.Mounter}, nil
+}
+
+// snapshot is the LVM snapshot of one logical volume, taken for one backup.
+type snapshot struct {
+	runner CommandRunner
+	vgName string
+	lvName string
+	size   string
+}
+
+func (s snapshot) name() string { return s.lvName + "_backup_snapshot" }
+
+func (s snapshot) path() string { return fmt.Sprintf("/dev/%s/%s", s.vgName, s.name()) }
+
+func (s snapshot) create(ctx context.Context) error {
+	_, err := s.runner.Run(ctx, command.Spec{
 		Name: "lvcreate",
 		Args: []string{
 			"--snapshot",
-			"--size", s.config.SnapshotSize,
-			"--name", s.snapshotName(),
-			s.lvPath(),
+			"--size", s.size,
+			"--name", s.name(),
+			fmt.Sprintf("/dev/%s/%s", s.vgName, s.lvName),
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create LVM snapshot %q: %w", s.snapshotPath(), err)
+		return fmt.Errorf("create LVM snapshot %q: %w", s.path(), err)
 	}
+	return nil
+}
 
-	mountPath, mountErr := s.deps.Mounter.Mount(ctx, s.snapshotPath())
-	if mountErr != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-		defer cancel()
-		_, rollbackErr := s.deps.Runner.Run(cleanupCtx, command.Spec{
-			Name: "lvremove",
-			Args: []string{"--force", s.snapshotPath()},
-		})
-		if rollbackErr != nil {
-			return nil, errors.Join(
-				fmt.Errorf("mount LVM snapshot %q: %w", s.snapshotPath(), mountErr),
-				fmt.Errorf("rollback LVM snapshot %q: %w", s.snapshotPath(), rollbackErr),
-			)
-		}
-		return nil, fmt.Errorf("mount LVM snapshot %q: %w", s.snapshotPath(), mountErr)
+func (s snapshot) remove(ctx context.Context) error {
+	_, err := s.runner.Run(ctx, command.Spec{
+		Name: "lvremove",
+		Args: []string{"--force", s.path()},
+	})
+	if err != nil {
+		return fmt.Errorf("remove LVM snapshot %q: %w", s.path(), err)
 	}
-
-	return &input{
-		mountPath:    mountPath,
-		snapshotPath: s.snapshotPath(),
-		runner:       s.deps.Runner,
-		mounter:      s.deps.Mounter,
-	}, nil
-}
-
-func (s *Source) lvPath() string {
-	return fmt.Sprintf("/dev/%s/%s", s.config.VGName, s.config.LVName)
-}
-
-func (s *Source) snapshotName() string {
-	return s.config.LVName + "_backup_snapshot"
-}
-
-func (s *Source) snapshotPath() string {
-	return fmt.Sprintf("/dev/%s/%s", s.config.VGName, s.snapshotName())
+	return nil
 }
 
 type input struct {
-	mountPath    string
-	snapshotPath string
-	runner       CommandRunner
-	mounter      Mounter
+	mountPath string
+	snapshot  snapshot
+	mounter   Mounter
 }
 
 func (i *input) Path() string { return i.mountPath }
 
+// Release undoes Open in reverse: unmount, then remove the snapshot.
 func (i *input) Release(ctx context.Context) error {
 	var errs []error
 	if err := i.mounter.Unmount(i.mountPath); err != nil {
 		errs = append(errs, fmt.Errorf("unmount %q: %w", i.mountPath, err))
 	}
-	_, err := i.runner.Run(ctx, command.Spec{
-		Name: "lvremove",
-		Args: []string{"--force", i.snapshotPath},
-	})
-	if err != nil {
-		errs = append(errs, fmt.Errorf("remove LVM snapshot %q: %w", i.snapshotPath, err))
-	}
-	if err := os.RemoveAll(i.mountPath); err != nil {
-		errs = append(errs, fmt.Errorf("remove mount directory %q: %w", i.mountPath, err))
+	if err := i.snapshot.remove(ctx); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

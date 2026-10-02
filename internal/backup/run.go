@@ -9,7 +9,9 @@ import (
 	"time"
 )
 
-const releaseTimeout = 2 * time.Minute
+// ReleaseTimeout bounds releasing an Input, or rolling back a failed Open,
+// which still run after the Run is cancelled.
+const ReleaseTimeout = 2 * time.Minute
 
 // Backup pairs a source with the destination it is backed up to.
 type Backup struct {
@@ -82,7 +84,7 @@ func runOne(ctx context.Context, b Backup) (retErr error) {
 		return fmt.Errorf("open source: %w", err)
 	}
 	defer func() {
-		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ReleaseTimeout)
 		defer cancel()
 		if err := input.Release(releaseCtx); err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("release source: %w", err))

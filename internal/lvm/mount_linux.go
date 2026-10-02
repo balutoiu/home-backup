@@ -11,17 +11,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// SystemMounter mounts snapshot devices through Linux mount syscalls.
+// SystemMounter mounts snapshot devices through Linux mount syscalls, each in
+// a temporary directory it creates on Mount and removes on Unmount.
 type SystemMounter struct {
 	runner CommandRunner
+	// dir holds the mount directories; empty means os.TempDir.
+	dir     string
+	mount   func(source, target, fstype string, flags uintptr, data string) error
+	unmount func(target string, flags int) error
 }
 
 // NewSystemMounter constructs a Linux system mounter.
 func NewSystemMounter(runner CommandRunner) *SystemMounter {
-	return &SystemMounter{runner: runner}
+	return &SystemMounter{runner: runner, mount: unix.Mount, unmount: unix.Unmount}
 }
 
-// Mount detects the filesystem and mounts device read-only in a temporary directory.
+// Mount detects the filesystem and mounts device read-only in a new directory.
 func (m *SystemMounter) Mount(ctx context.Context, device string) (string, error) {
 	result, err := m.runner.Run(ctx, command.Spec{
 		Name: "blkid",
@@ -35,15 +40,17 @@ func (m *SystemMounter) Mount(ctx context.Context, device string) (string, error
 		return "", fmt.Errorf("no filesystem detected on %q", device)
 	}
 
-	mountPath, err := os.MkdirTemp("", "lvm-backup-*")
+	mountPath, err := os.MkdirTemp(m.dir, "lvm-backup-*")
 	if err != nil {
 		return "", fmt.Errorf("create mount directory: %w", err)
 	}
 	data := ""
 	if filesystem == "xfs" {
+		// The snapshot shares its origin's UUID, and XFS refuses to mount a
+		// duplicate while the origin is mounted.
 		data = "nouuid"
 	}
-	if err := unix.Mount(device, mountPath, filesystem, unix.MS_RDONLY, data); err != nil {
+	if err := m.mount(device, mountPath, filesystem, unix.MS_RDONLY, data); err != nil {
 		mountErr := fmt.Errorf("mount %q at %q: %w", device, mountPath, err)
 		if removeErr := os.RemoveAll(mountPath); removeErr != nil {
 			return "", errors.Join(mountErr, fmt.Errorf("remove mount directory %q: %w", mountPath, removeErr))
@@ -53,9 +60,16 @@ func (m *SystemMounter) Mount(ctx context.Context, device string) (string, error
 	return mountPath, nil
 }
 
-// Unmount unmounts a snapshot path.
+// Unmount unmounts path and removes its directory.
 func (m *SystemMounter) Unmount(path string) error {
-	return unix.Unmount(path, 0)
+	var errs []error
+	if err := m.unmount(path, 0); err != nil {
+		errs = append(errs, err)
+	}
+	if err := os.RemoveAll(path); err != nil {
+		errs = append(errs, fmt.Errorf("remove mount directory %q: %w", path, err))
+	}
+	return errors.Join(errs...)
 }
 
 var _ Mounter = (*SystemMounter)(nil)
