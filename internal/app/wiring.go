@@ -42,33 +42,34 @@ func buildBackups(cfg config.Config, deps wiringDependencies) ([]backup.Backup, 
 }
 
 func buildSource(spec config.Source, deps wiringDependencies) (backup.Source, error) {
-	switch spec.Kind {
-	case config.SourceDirectory:
-		return directory.NewSource(spec.Directory.Path), nil
-	case config.SourceLVM:
+	switch spec := spec.(type) {
+	case config.DirectorySource:
+		return directory.NewSource(spec.Path), nil
+	case config.LVMSource:
 		mounter := lvm.NewSystemMounter(deps.runner)
 		return lvm.NewSource(lvm.Config{
-			VGName: spec.LVM.VGName,
-			LVName: spec.LVM.LVName,
+			VGName:       spec.VGName,
+			LVName:       spec.LVName,
+			SnapshotSize: spec.SnapshotSize,
 		}, lvm.Dependencies{
 			Runner:  deps.runner,
 			Mounter: mounter,
 			EUID:    deps.euid,
 		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported source kind %q", spec.Kind)
+		return nil, fmt.Errorf("unsupported source %T", spec)
 	}
 }
 
 func buildDestination(spec config.Destination, deps wiringDependencies) (backup.Destination, error) {
-	switch spec.Kind {
-	case config.DestinationRestic:
+	switch spec := spec.(type) {
+	case config.ResticDestination:
 		return restic.NewDestination(restic.Config{
-			Repo:     spec.Restic.Repo,
-			KeepLast: spec.Restic.KeepLast,
-			GroupBy:  spec.Restic.GroupBy,
+			Repo:     spec.Repo,
+			KeepLast: spec.KeepLast,
+			GroupBy:  spec.GroupBy,
 		}, deps.runner), nil
 	default:
-		return nil, fmt.Errorf("unsupported destination kind %q", spec.Kind)
+		return nil, fmt.Errorf("unsupported destination %T", spec)
 	}
 }

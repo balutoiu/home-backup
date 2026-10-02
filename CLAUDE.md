@@ -14,6 +14,7 @@ A file for [guiding coding agents](https://agents.md/).
 
 - This is a Linux-only application. On non-Linux hosts, Make runs Go commands in a Linux Docker container; Docker is required.
 - Sources and destinations are compile-time adapters wired in `internal/app`. Do not introduce runtime plugin registries or dependency-injection frameworks.
+- `internal/config` owns YAML decoding and every user-settable default. Adapter packages (`internal/lvm`, `internal/restic`, …) take a complete plain `Config` and use it as given.
 
 ## Verification
 

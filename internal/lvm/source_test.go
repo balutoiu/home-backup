@@ -70,7 +70,7 @@ func TestSourceOpenRequiresRoot(t *testing.T) {
 func TestSourceOpenAndRelease(t *testing.T) {
 	runner := &fakeRunner{}
 	mounter := &fakeMounter{path: t.TempDir()}
-	source := NewSource(Config{VGName: "vg0", LVName: "home"}, Dependencies{
+	source := NewSource(Config{VGName: "vg0", LVName: "home", SnapshotSize: "10G"}, Dependencies{
 		Runner:  runner,
 		Mounter: mounter,
 		EUID:    func() int { return 0 },
@@ -93,7 +93,7 @@ func TestSourceOpenAndRelease(t *testing.T) {
 			Name: "lvcreate",
 			Args: []string{
 				"--snapshot",
-				"--size", DefaultSnapshotSize,
+				"--size", "10G",
 				"--name", "home_backup_snapshot",
 				"/dev/vg0/home",
 			},

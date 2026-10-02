@@ -52,17 +52,18 @@ func TestDecodeValidConfig(t *testing.T) {
 	if len(cfg.Backups) != 2 {
 		t.Fatalf("len(Backups) = %d, want 2", len(cfg.Backups))
 	}
-	if got := cfg.Backups[0].Source; got.Kind != SourceDirectory || got.Directory == nil || got.Directory.Path != "/srv/photos" {
-		t.Fatalf("directory source = %#v", got)
+	if got, ok := cfg.Backups[0].Source.(DirectorySource); !ok || got.Path != "/srv/photos" {
+		t.Fatalf("directory source = %#v", cfg.Backups[0].Source)
 	}
-	if got := cfg.Backups[0].Destination.Restic; got == nil || got.KeepLast != DefaultResticKeepLast || got.GroupBy != DefaultResticGroupBy {
-		t.Fatalf("default Restic destination = %#v", got)
+	if got, ok := cfg.Backups[0].Destination.(ResticDestination); !ok || got.KeepLast != DefaultResticKeepLast || got.GroupBy != DefaultResticGroupBy {
+		t.Fatalf("default Restic destination = %#v", cfg.Backups[0].Destination)
 	}
-	if got := cfg.Backups[1].Source; got.Kind != SourceLVM || got.LVM == nil || got.LVM.VGName != "vg0" || got.LVM.LVName != "home" {
-		t.Fatalf("LVM source = %#v", got)
+	want := LVMSource{VGName: "vg0", LVName: "home", SnapshotSize: DefaultLVMSnapshotSize}
+	if got, ok := cfg.Backups[1].Source.(LVMSource); !ok || got != want {
+		t.Fatalf("LVM source = %#v", cfg.Backups[1].Source)
 	}
-	if got := cfg.Backups[1].Destination.Restic; got == nil || got.KeepLast != 4 || got.GroupBy != "paths" {
-		t.Fatalf("explicit Restic destination = %#v", got)
+	if got, ok := cfg.Backups[1].Destination.(ResticDestination); !ok || got.KeepLast != 4 || got.GroupBy != "paths" {
+		t.Fatalf("explicit Restic destination = %#v", cfg.Backups[1].Destination)
 	}
 }
 
@@ -77,7 +78,7 @@ func TestDecodeAcceptsNumericKeepLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
-	if got := cfg.Backups[0].Destination.Restic.KeepLast; got != 3 {
+	if got := cfg.Backups[0].Destination.(ResticDestination).KeepLast; got != 3 {
 		t.Fatalf("KeepLast = %d, want 3", got)
 	}
 }
@@ -93,7 +94,13 @@ func TestDecodeRejectsInvalidConfig(t *testing.T) {
 		{name: "empty backups", yaml: "backups: []\n", want: "at least one backup"},
 		{name: "unknown top-level field", yaml: "backups: []\nextra: true\n", want: "field extra not found"},
 		{name: "unknown source field", yaml: "backups:\n- source: {type: directory, path: /tmp, typo: value}\n  destination: {type: restic, repo: /repo}\n", want: "unknown source field"},
-		{name: "unknown source type", yaml: "backups:\n- source: {type: zfs}\n  destination: {type: restic, repo: /repo}\n", want: "unsupported source type"},
+		{name: "unknown LVM field", yaml: "backups:\n- source: {type: lvm, vg_name: vg0, lv_name: home, snapshot: 1G}\n  destination: {type: restic, repo: /repo}\n", want: `unknown source field "snapshot" at line 2`},
+		{name: "unknown destination field", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep: 3}\n", want: `unknown destination field "keep" at line 3`},
+		{name: "unknown source type", yaml: "backups:\n- source: {type: zfs}\n  destination: {type: restic, repo: /repo}\n", want: `unsupported source type "zfs" (want directory or lvm)`},
+		{name: "unknown destination type", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: borg}\n", want: `unsupported destination type "borg" (want restic)`},
+		{name: "source not a mapping", yaml: "backups:\n- source: /tmp\n  destination: {type: restic, repo: /repo}\n", want: "source must be a mapping"},
+		{name: "missing LVM vg_name", yaml: "backups:\n- source: {type: lvm, lv_name: home}\n  destination: {type: restic, repo: /repo}\n", want: "LVM source vg_name is required"},
+		{name: "missing restic repo", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic}\n", want: "restic destination repo is required"},
 		{name: "missing directory path", yaml: "backups:\n- source: {type: directory}\n  destination: {type: restic, repo: /repo}\n", want: "directory source path is required"},
 		{name: "negative retention", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo, keep_last: -1}\n", want: "keep_last cannot be negative"},
 		{name: "multiple documents", yaml: "backups:\n- source: {type: directory, path: /tmp}\n  destination: {type: restic, repo: /repo}\n---\nbackups: []\n", want: "multiple YAML documents"},

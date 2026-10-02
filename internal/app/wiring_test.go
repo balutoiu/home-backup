@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -20,18 +21,8 @@ func (f *fakeRunner) Run(_ context.Context, spec command.Spec) (command.Result, 
 
 func TestBuildBackups(t *testing.T) {
 	cfg := config.Config{Backups: []config.Backup{{
-		Source: config.Source{
-			Kind:      config.SourceDirectory,
-			Directory: &config.DirectorySource{Path: "/srv/home"},
-		},
-		Destination: config.Destination{
-			Kind: config.DestinationRestic,
-			Restic: &config.ResticDestination{
-				Repo:     "/backups/restic",
-				KeepLast: 5,
-				GroupBy:  "host",
-			},
-		},
+		Source:      config.DirectorySource{Path: "/srv/home"},
+		Destination: config.ResticDestination{Repo: "/backups/restic", KeepLast: 5, GroupBy: "host"},
 	}}}
 
 	backups, err := buildBackups(cfg, wiringDependencies{
@@ -49,39 +40,48 @@ func TestBuildBackups(t *testing.T) {
 	}
 }
 
-func TestBuildBackupsRejectsUnsupportedKinds(t *testing.T) {
-	validSource := config.Source{
-		Kind:      config.SourceDirectory,
-		Directory: &config.DirectorySource{Path: "/srv/home"},
+func TestBuildBackupsPassesLVMSnapshotSize(t *testing.T) {
+	runner := &fakeRunner{}
+	backups, err := buildBackups(config.Config{Backups: []config.Backup{{
+		Source:      config.LVMSource{VGName: "vg0", LVName: "home", SnapshotSize: "2G"},
+		Destination: config.ResticDestination{Repo: "/backups/restic", KeepLast: 5, GroupBy: "host"},
+	}}}, wiringDependencies{runner: runner, euid: func() int { return 0 }})
+	if err != nil {
+		t.Fatalf("buildBackups() error = %v", err)
 	}
-	validDestination := config.Destination{
-		Kind: config.DestinationRestic,
-		Restic: &config.ResticDestination{
-			Repo:     "/backups/restic",
-			KeepLast: 5,
-			GroupBy:  "host",
-		},
+
+	// The fake blkid prints nothing, so Open stops before mounting.
+	if _, err := backups[0].Source.Open(context.Background()); err == nil {
+		t.Fatal("Open() error = nil, want missing filesystem")
 	}
+	for _, spec := range runner.specs {
+		if spec.Name == "lvcreate" {
+			if !slices.Contains(spec.Args, "2G") {
+				t.Fatalf("lvcreate args = %v, want size 2G", spec.Args)
+			}
+			return
+		}
+	}
+	t.Fatalf("commands = %v, want lvcreate", runner.specs)
+}
+
+func TestBuildBackupsRejectsMissingVariants(t *testing.T) {
+	validSource := config.DirectorySource{Path: "/srv/home"}
+	validDestination := config.ResticDestination{Repo: "/backups/restic", KeepLast: 5, GroupBy: "host"}
 	tests := []struct {
 		name        string
 		backup      config.Backup
 		wantMessage string
 	}{
 		{
-			name: "source",
-			backup: config.Backup{
-				Source:      config.Source{Kind: config.SourceKind("future-source")},
-				Destination: validDestination,
-			},
-			wantMessage: "unsupported source kind",
+			name:        "source",
+			backup:      config.Backup{Destination: validDestination},
+			wantMessage: "unsupported source",
 		},
 		{
-			name: "destination",
-			backup: config.Backup{
-				Source:      validSource,
-				Destination: config.Destination{Kind: config.DestinationKind("future-destination")},
-			},
-			wantMessage: "unsupported destination kind",
+			name:        "destination",
+			backup:      config.Backup{Source: validSource},
+			wantMessage: "unsupported destination",
 		},
 	}
 

@@ -5,19 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
+	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
-
-var sourceFields = map[SourceKind]map[string]struct{}{
-	SourceDirectory: {"type": {}, "path": {}},
-	SourceLVM:       {"type": {}, "vg_name": {}, "lv_name": {}},
-}
-
-var destinationFields = map[DestinationKind]map[string]struct{}{
-	DestinationRestic: {"type": {}, "repo": {}, "keep_last": {}, "group_by": {}},
-}
 
 type rawConfig struct {
 	Backups []rawBackup `yaml:"backups"`
@@ -26,46 +18,6 @@ type rawConfig struct {
 type rawBackup struct {
 	Source      yaml.Node `yaml:"source"`
 	Destination yaml.Node `yaml:"destination"`
-}
-
-type rawType struct {
-	Type string `yaml:"type"`
-}
-
-type rawDirectory struct {
-	Type string `yaml:"type"`
-	Path string `yaml:"path"`
-}
-
-type rawLVM struct {
-	Type   string `yaml:"type"`
-	VGName string `yaml:"vg_name"`
-	LVName string `yaml:"lv_name"`
-}
-
-type rawRestic struct {
-	Type     string      `yaml:"type"`
-	Repo     string      `yaml:"repo"`
-	KeepLast optionalInt `yaml:"keep_last"`
-	GroupBy  string      `yaml:"group_by"`
-}
-
-type optionalInt struct {
-	value int
-	set   bool
-}
-
-func (v *optionalInt) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind != yaml.ScalarNode {
-		return fmt.Errorf("expected integer scalar at line %d", node.Line)
-	}
-	value, err := strconv.Atoi(node.Value)
-	if err != nil {
-		return fmt.Errorf("parse integer %q at line %d: %w", node.Value, node.Line, err)
-	}
-	v.value = value
-	v.set = true
-	return nil
 }
 
 // Load reads, decodes, and validates a configuration file.
@@ -93,6 +45,9 @@ func Decode(r io.Reader, source string) (Config, error) {
 		}
 		return Config{}, fmt.Errorf("decode config %q: %w", source, err)
 	}
+	if len(raw.Backups) == 0 {
+		return Config{}, fmt.Errorf("validate config %q: configuration requires at least one backup", source)
+	}
 
 	cfg := Config{Backups: make([]Backup, 0, len(raw.Backups))}
 	for i, rawBackup := range raw.Backups {
@@ -106,84 +61,75 @@ func Decode(r io.Reader, source string) (Config, error) {
 		}
 		cfg.Backups = append(cfg.Backups, Backup{Source: sourceSpec, Destination: destinationSpec})
 	}
-	if err := cfg.validate(); err != nil {
-		return Config{}, fmt.Errorf("validate config %q: %w", source, err)
-	}
 	return cfg, nil
 }
 
 func decodeSource(node yaml.Node) (Source, error) {
-	var discriminator rawType
-	if err := decodeMapping(node, nil, false, "source", &discriminator); err != nil {
-		return Source{}, err
+	kind, err := decodeType(node, "source")
+	if err != nil {
+		return nil, err
 	}
-	kind := SourceKind(discriminator.Type)
-	allowed, ok := sourceFields[kind]
-	if !ok {
-		return Source{}, fmt.Errorf("unsupported source type %q", discriminator.Type)
-	}
-
 	switch kind {
-	case SourceDirectory:
-		var raw rawDirectory
-		if err := decodeMapping(node, allowed, true, "source", &raw); err != nil {
-			return Source{}, err
-		}
-		return Source{Kind: kind, Directory: &DirectorySource{Path: raw.Path}}, nil
-	case SourceLVM:
-		var raw rawLVM
-		if err := decodeMapping(node, allowed, true, "source", &raw); err != nil {
-			return Source{}, err
-		}
-		return Source{Kind: kind, LVM: &LVMSource{VGName: raw.VGName, LVName: raw.LVName}}, nil
+	case directoryType:
+		return decodeDirectory(node)
+	case lvmType:
+		return decodeLVM(node)
 	default:
-		return Source{}, fmt.Errorf("unsupported source type %q", discriminator.Type)
+		return nil, fmt.Errorf("unsupported source type %q (want %s or %s)", kind, directoryType, lvmType)
 	}
 }
 
 func decodeDestination(node yaml.Node) (Destination, error) {
-	var discriminator rawType
-	if err := decodeMapping(node, nil, false, "destination", &discriminator); err != nil {
-		return Destination{}, err
+	kind, err := decodeType(node, "destination")
+	if err != nil {
+		return nil, err
 	}
-	kind := DestinationKind(discriminator.Type)
-	allowed, ok := destinationFields[kind]
-	if !ok {
-		return Destination{}, fmt.Errorf("unsupported destination type %q", discriminator.Type)
+	switch kind {
+	case resticType:
+		return decodeRestic(node)
+	default:
+		return nil, fmt.Errorf("unsupported destination type %q (want %s)", kind, resticType)
 	}
-
-	var raw rawRestic
-	if err := decodeMapping(node, allowed, true, "destination", &raw); err != nil {
-		return Destination{}, err
-	}
-	keepLast := DefaultResticKeepLast
-	if raw.KeepLast.set && raw.KeepLast.value != 0 {
-		keepLast = raw.KeepLast.value
-	}
-	groupBy := raw.GroupBy
-	if groupBy == "" {
-		groupBy = DefaultResticGroupBy
-	}
-	return Destination{
-		Kind:   kind,
-		Restic: &ResticDestination{Repo: raw.Repo, KeepLast: keepLast, GroupBy: groupBy},
-	}, nil
 }
 
-func decodeMapping(node yaml.Node, allowed map[string]struct{}, rejectUnknown bool, subject string, target any) error {
+// decodeType returns the type field of a source or destination mapping.
+func decodeType(node yaml.Node, subject string) (string, error) {
 	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("%s must be a mapping", subject)
+		return "", fmt.Errorf("%s must be a mapping", subject)
 	}
-	if rejectUnknown {
-		for i := 0; i < len(node.Content); i += 2 {
-			key := node.Content[i]
-			if _, ok := allowed[key.Value]; !ok {
-				return fmt.Errorf("unknown %s field %q at line %d", subject, key.Value, key.Line)
-			}
+	var discriminator struct {
+		Type string `yaml:"type"`
+	}
+	if err := node.Decode(&discriminator); err != nil {
+		return "", fmt.Errorf("decode %s: %w", subject, err)
+	}
+	return discriminator.Type, nil
+}
+
+// decodeStrict decodes a mapping into target, a struct pointer, rejecting
+// keys other than type and target's yaml tags. Node.Decode ignores
+// KnownFields, so the check is done here.
+func decodeStrict(node yaml.Node, subject string, target any) error {
+	known := yamlKeys(reflect.TypeOf(target).Elem())
+	for i := 0; i < len(node.Content); i += 2 {
+		key := node.Content[i]
+		if key.Value != "type" && !known[key.Value] {
+			return fmt.Errorf("unknown %s field %q at line %d", subject, key.Value, key.Line)
 		}
 	}
 	if err := node.Decode(target); err != nil {
 		return fmt.Errorf("decode %s: %w", subject, err)
 	}
 	return nil
+}
+
+func yamlKeys(t reflect.Type) map[string]bool {
+	keys := make(map[string]bool, t.NumField())
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
+		if name != "" && name != "-" {
+			keys[name] = true
+		}
+	}
+	return keys
 }

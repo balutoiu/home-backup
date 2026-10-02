@@ -12,9 +12,6 @@ import (
 	"github.com/balutoiu/home-backup/internal/command"
 )
 
-// DefaultSnapshotSize is used when a source does not specify a snapshot size.
-const DefaultSnapshotSize = "10G"
-
 // CommandRunner executes the system commands needed by an LVM source.
 type CommandRunner interface {
 	Run(context.Context, command.Spec) (command.Result, error)
@@ -48,9 +45,6 @@ type Source struct {
 
 // NewSource constructs an LVM source.
 func NewSource(cfg Config, deps Dependencies) *Source {
-	if cfg.SnapshotSize == "" {
-		cfg.SnapshotSize = DefaultSnapshotSize
-	}
 	return &Source{config: cfg, deps: deps}
 }
 
