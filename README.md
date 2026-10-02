@@ -17,4 +17,4 @@ An LVM backup snapshots `<vg>/<lv>` as `<vg>/<lv>_backup_snapshot` and removes t
 
 See [`examples/sample-config.yaml`](examples/sample-config.yaml).
 
-Provide the Restic password and backend credentials through Restic's standard environment variables or configuration. Configuration decoding is strict; unknown fields and invalid values are rejected before any backup starts.
+Provide the Restic password and backend credentials through Restic's standard environment variables or configuration. home-backup passes each `repo` to Restic through `RESTIC_REPOSITORY`, so it never appears in logs or process arguments. Configuration decoding is strict; unknown fields and invalid values are rejected before any backup starts.

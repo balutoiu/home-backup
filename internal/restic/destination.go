@@ -38,44 +38,42 @@ func NewDestination(cfg Config, runner CommandRunner) *Destination {
 
 // Backup creates a snapshot and applies the configured retention policy.
 func (d *Destination) Backup(ctx context.Context, path string) error {
-	_, err := d.runner.Run(ctx, command.Spec{
-		Name: "restic",
-		Args: []string{"--repo", d.config.Repo, "cat", "config"},
-	})
+	_, err := d.runner.Run(ctx, d.spec("cat", "config"))
 	if err != nil {
 		var exitErr *command.ExitError
 		if !errors.As(err, &exitErr) || exitErr.ExitCode() != repositoryNotFoundExitCode {
 			return fmt.Errorf("check Restic repository: %w", err)
 		}
-		if _, err := d.runner.Run(ctx, command.Spec{
-			Name: "restic",
-			Args: []string{"--repo", d.config.Repo, "init"},
-		}); err != nil {
+		if _, err := d.runner.Run(ctx, d.spec("init")); err != nil {
 			return fmt.Errorf("initialize Restic repository: %w", err)
 		}
 	}
 
-	if _, err := d.runner.Run(ctx, command.Spec{
-		Name: "restic",
-		Args: []string{"--repo", d.config.Repo, "backup", "."},
-		Dir:  path,
-	}); err != nil {
+	backupSpec := d.spec("backup", ".")
+	backupSpec.Dir = path
+	if _, err := d.runner.Run(ctx, backupSpec); err != nil {
 		return fmt.Errorf("create Restic backup: %w", err)
 	}
 
-	if _, err := d.runner.Run(ctx, command.Spec{
-		Name: "restic",
-		Args: []string{
-			"--repo", d.config.Repo,
-			"forget",
-			"--group-by", d.config.GroupBy,
-			"--keep-last", strconv.Itoa(d.config.KeepLast),
-			"--prune",
-		},
-	}); err != nil {
+	if _, err := d.runner.Run(ctx, d.spec(
+		"forget",
+		"--group-by", d.config.GroupBy,
+		"--keep-last", strconv.Itoa(d.config.KeepLast),
+		"--prune",
+	)); err != nil {
 		return fmt.Errorf("apply Restic retention: %w", err)
 	}
 	return nil
+}
+
+// spec builds a restic invocation. The repo goes in RESTIC_REPOSITORY, not
+// --repo, because its URL can hold credentials and args are logged.
+func (d *Destination) spec(args ...string) command.Spec {
+	return command.Spec{
+		Name: "restic",
+		Args: args,
+		Env:  []string{"RESTIC_REPOSITORY=" + d.config.Repo},
+	}
 }
 
 var _ backup.Destination = (*Destination)(nil)

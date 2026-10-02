@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/balutoiu/home-backup/internal/command"
@@ -34,16 +35,16 @@ func TestDestinationBackupExistingRepository(t *testing.T) {
 	if err := destination.Backup(context.Background(), "/snapshot"); err != nil {
 		t.Fatalf("Backup() error = %v", err)
 	}
+	env := []string{"RESTIC_REPOSITORY=/backups/restic"}
 	want := []command.Spec{
-		{Name: "restic", Args: []string{"--repo", "/backups/restic", "cat", "config"}},
-		{Name: "restic", Args: []string{"--repo", "/backups/restic", "backup", "."}, Dir: "/snapshot"},
+		{Name: "restic", Args: []string{"cat", "config"}, Env: env},
+		{Name: "restic", Args: []string{"backup", "."}, Dir: "/snapshot", Env: env},
 		{Name: "restic", Args: []string{
-			"--repo", "/backups/restic",
 			"forget",
 			"--group-by", "host",
 			"--keep-last", "5",
 			"--prune",
-		}},
+		}, Env: env},
 	}
 	if !reflect.DeepEqual(runner.specs, want) {
 		t.Fatalf("commands = %#v, want %#v", runner.specs, want)
@@ -66,20 +67,42 @@ func TestDestinationBackupInitializesMissingRepository(t *testing.T) {
 	if err := destination.Backup(context.Background(), "/snapshot"); err != nil {
 		t.Fatalf("Backup() error = %v", err)
 	}
+	env := []string{"RESTIC_REPOSITORY=sftp:backup:/repo"}
 	want := []command.Spec{
-		{Name: "restic", Args: []string{"--repo", "sftp:backup:/repo", "cat", "config"}},
-		{Name: "restic", Args: []string{"--repo", "sftp:backup:/repo", "init"}},
-		{Name: "restic", Args: []string{"--repo", "sftp:backup:/repo", "backup", "."}, Dir: "/snapshot"},
+		{Name: "restic", Args: []string{"cat", "config"}, Env: env},
+		{Name: "restic", Args: []string{"init"}, Env: env},
+		{Name: "restic", Args: []string{"backup", "."}, Dir: "/snapshot", Env: env},
 		{Name: "restic", Args: []string{
-			"--repo", "sftp:backup:/repo",
 			"forget",
 			"--group-by", "paths",
 			"--keep-last", "2",
 			"--prune",
-		}},
+		}, Env: env},
 	}
 	if !reflect.DeepEqual(runner.specs, want) {
 		t.Fatalf("commands = %#v, want %#v", runner.specs, want)
+	}
+}
+
+func TestDestinationBackupKeepsRepositoryOutOfArgs(t *testing.T) {
+	const repo = "rest:https://user:secret@backup.example/repo"
+	missing := &command.ExitError{
+		Spec:   command.Spec{Name: "restic"},
+		Result: command.Result{ExitCode: 10},
+		Err:    errors.New("exit status 10"),
+	}
+	runner := &fakeRunner{errs: []error{missing}}
+	destination := NewDestination(Config{Repo: repo, KeepLast: 1, GroupBy: "host"}, runner)
+
+	if err := destination.Backup(context.Background(), "/snapshot"); err != nil {
+		t.Fatalf("Backup() error = %v", err)
+	}
+	for _, spec := range runner.specs {
+		for _, arg := range spec.Args {
+			if strings.Contains(arg, "secret") {
+				t.Fatalf("command %v has the repository in its args", spec.Args)
+			}
+		}
 	}
 }
 

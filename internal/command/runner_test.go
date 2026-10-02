@@ -1,11 +1,13 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -75,6 +77,26 @@ func TestRunnerReturnsCapturedSuccess(t *testing.T) {
 	}
 	if result.ExitCode != 0 || result.Stdout != "standard output" || result.Stderr != "standard error" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestRunnerLogsArgsButNotEnv(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	runner := NewRunner(logger)
+	_, err := runner.Run(context.Background(), Spec{
+		Name: os.Args[0],
+		Args: []string{"-test.run=TestHelperProcess"},
+		Env:  []string{"HOME_BACKUP_HELPER=1", "HOME_BACKUP_HELPER_SUCCESS=1", "HOME_BACKUP_SECRET=hunter2"},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !strings.Contains(logs.String(), "-test.run=TestHelperProcess") {
+		t.Fatalf("logs = %q, want the command args", logs.String())
+	}
+	if strings.Contains(logs.String(), "hunter2") {
+		t.Fatalf("logs = %q, want no env values", logs.String())
 	}
 }
 

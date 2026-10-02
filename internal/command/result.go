@@ -11,7 +11,8 @@ type Spec struct {
 	Name string
 	Args []string
 	Dir  string
-	Env  []string
+	// Env is never logged, unlike Args, so secrets go here.
+	Env []string
 }
 
 // Result captures a command's output and exit status.
