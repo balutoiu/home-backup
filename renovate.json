@@ -3,8 +3,10 @@
   "extends": [
     "config:recommended",
     "customManagers:dockerfileVersions",
-    "customManagers:githubActionsVersions",
-    ":disableRateLimiting"
+    "customManagers:githubActionsVersions"
+  ],
+  "labels": [
+    "ready-for-agent-review"
   ],
   "customManagers": [
     {
