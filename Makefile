@@ -1,4 +1,4 @@
-GO_IMAGE ?= golang:1.27.3-alpine
+GO_IMAGE ?= golang:1.27.4-alpine
 GO := go
 
 ifneq ($(shell uname -s),Linux)
